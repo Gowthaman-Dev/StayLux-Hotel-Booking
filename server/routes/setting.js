@@ -6,7 +6,7 @@ import { authorize } from "../middlewares/role.js";
 const router = express.Router();
 
 // GET settings (any logged-in user can view)
-router.get("/", protect, getSettings);
+router.get("/",  getSettings);
 
 // UPDATE settings (admin only)
 router.put("/", protect, authorize("admin"), updateSettings);

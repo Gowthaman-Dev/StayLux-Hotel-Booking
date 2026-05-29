@@ -33,12 +33,14 @@ const app = express();
 
 // ✅ Core Middlewares
 app.use(express.json());
-app.use(
-  cors({
-    origin: "http://localhost:5173",
-    credentials: true,
-  })
-);
+
+// ✅ CORS – allow your Vercel frontend (read from environment)
+//    On Render, set FRONTEND_URL = https://stay-lux-hotel-booking-nine.vercel.app
+//    For testing only, you can replace with `origin: true` (allows any origin)
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true,
+}));
 
 // ✅ Logger
 app.use(logger);
