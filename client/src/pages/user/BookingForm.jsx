@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import axios from "../../api/axios";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
+import axios from "../../api/axios";
 import Spinner from "../../components/common/Spinner";
 import { showSuccess, showError } from "../../utils/toast";
 import { useAuth } from "../../context/AuthContext";
+import { getImageUrl } from "../../utils/imageUtils";
 import {
   FaHotel,
   FaBed,
-  FaLayerGroup,
   FaUsers,
   FaRupeeSign,
   FaCalendarAlt,
@@ -20,8 +20,9 @@ import {
   FaMobileAlt,
   FaArrowRight,
   FaCheckCircle,
+  FaChevronLeft,
+  FaChevronRight,
 } from "react-icons/fa";
-import { getImageUrl } from "../../utils/imageUtils";
 
 const BookingForm = () => {
   const navigate = useNavigate();
@@ -29,8 +30,8 @@ const BookingForm = () => {
   const { roomId } = useParams();
   const { user } = useAuth();
 
-  const { checkIn: locationCheckIn, checkOut: locationCheckOut, roomId: stateRoomId } = location.state || {};
-  const finalRoomId = roomId || stateRoomId;
+  const { checkIn: locationCheckIn, checkOut: locationCheckOut } = location.state || {};
+  const finalRoomId = roomId || location.state?.roomId;
   const checkIn = locationCheckIn;
   const checkOut = locationCheckOut;
 
@@ -38,6 +39,7 @@ const BookingForm = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const [formData, setFormData] = useState({
     name: user?.name || "",
@@ -65,13 +67,12 @@ const BookingForm = () => {
       }
       return;
     }
-
     try {
       setLoading(true);
       const res = await axios.get(`/rooms/id/${finalRoomId}`);
       setRoom(res.data.room);
     } catch (err) {
-      console.error("Fetch room error:", err);
+      console.error(err);
       showError(err.response?.data?.message || "Failed to load room details");
       if (!redirecting) navigate("/rooms");
     } finally {
@@ -104,9 +105,34 @@ const BookingForm = () => {
     return Math.round(subtotal + gst);
   };
 
-  const calculateGST = () => {
-    const total = calculateTotal();
-    return Math.round(total * 0.18 / 1.18);
+  const nights = calculateNights();
+  const totalAmount = calculateTotal();
+  const roomCharge = room?.pricePerNight * nights || 0;
+  const extraGuests = Math.max(0, (formData.guests || 0) - (room?.maxGuests || 2));
+  const extraGuestCharge = extraGuests * 500 * nights;
+  const gstAmount = Math.round((roomCharge + extraGuestCharge + 200) * 0.18);
+  const images = room?.images || [];
+
+  const nextImage = () => {
+    if (images.length > 1) {
+      setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    }
+  };
+
+  const prevImage = () => {
+    if (images.length > 1) {
+      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -142,7 +168,7 @@ const BookingForm = () => {
         showError("Room not found");
         navigate("/rooms");
       } else {
-        showError(err.response?.data?.message || "Failed to create booking. Please try again.");
+        showError(err.response?.data?.message || "Failed to create booking");
       }
     } finally {
       setSubmitting(false);
@@ -153,259 +179,171 @@ const BookingForm = () => {
   if (redirecting) return <Spinner fullScreen text="Redirecting..." />;
   if (!room) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-gray-500 mb-4">Room not found</p>
-        <button onClick={() => navigate("/rooms")} className="bg-amber-600 text-white px-4 py-2 rounded-xl">
-          Back to Rooms
-        </button>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 mb-4">Room not found</p>
+          <button onClick={() => navigate("/rooms")} className="bg-gray-900 text-white px-4 py-2 rounded-xl">Back to Rooms</button>
+        </div>
       </div>
     );
   }
 
-  const nights = calculateNights();
-  const totalAmount = calculateTotal();
-  const roomCharge = room.pricePerNight * nights;
-  const extraGuests = Math.max(0, formData.guests - (room.maxGuests || 2));
-  const extraGuestCharge = extraGuests * 500 * nights;
-  const gstAmount = calculateGST();
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "—";
-    return new Date(dateStr).toLocaleDateString("en-IN", {
-      weekday: "short",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Complete Your Booking</h1>
           <p className="text-gray-500 mt-1">Review details and confirm your reservation</p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column - Room & Stay Info */}
+          {/* LEFT COLUMN – Room & Stay Info */}
           <div className="space-y-6">
-            {/* Room Details Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-5 py-3">
-                <h2 className="text-white font-semibold flex items-center gap-2">
-                  <FaHotel /> Room Details
-                </h2>
-              </div>
-              <div className="p-5">
-                {room.images?.length > 0 && (
-                  <img
-                    src={getImageUrl(room.images[0])}
-                    alt={room.roomNumber}
-                    className="w-full h-48 object-cover rounded-xl mb-4 hover:scale-105 transition-transform duration-300"
-                    onError={(e) => (e.target.src = "https://via.placeholder.com/400x200?text=No+Image")}
-                  />
-                )}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <FaBed className="text-amber-500" /> <span>Room No:</span>
-                    <span className="font-semibold text-gray-900">{room.roomNumber}</span>
+            {/* Room Gallery Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              {images.length > 0 && (
+                <div className="relative group bg-gray-100">
+                  <div className="relative h-64 md:h-80">
+                    <img
+                      src={getImageUrl(images[currentImageIndex])}
+                      alt={`Room ${room.roomNumber}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          onClick={prevImage}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-md transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <FaChevronLeft size={18} />
+                        </button>
+                        <button
+                          onClick={nextImage}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-md transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <FaChevronRight size={18} />
+                        </button>
+                        <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded-md">
+                          {currentImageIndex + 1} / {images.length}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <FaHotel className="text-amber-500" /> <span>Type:</span>
-                    <span className="font-semibold capitalize text-gray-900">{room.roomType}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <FaLayerGroup className="text-amber-500" /> <span>Floor:</span>
-                    <span>{room.floor}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <FaUsers className="text-amber-500" /> <span>Max Guests:</span>
-                    <span>{room.maxGuests}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600 col-span-2">
-                    <FaRupeeSign className="text-amber-500" /> <span>Price/Night:</span>
-                    <span className="font-bold text-amber-600">₹{room.pricePerNight}</span>
-                  </div>
+                </div>
+              )}
+              <div className="p-5 border-t border-gray-100">
+                <div className="flex justify-between items-start mb-2">
+                  <h2 className="text-xl font-bold text-gray-900">Room {room.roomNumber}</h2>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                    room.status === "available" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    {room.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm mt-3">
+                  <div className="flex items-center gap-2 text-gray-600"><FaBed className="text-gray-400" /> <span>Type:</span> <span className="font-medium text-gray-900 capitalize">{room.roomType}</span></div>
+                  <div className="flex items-center gap-2 text-gray-600"><FaHotel className="text-gray-400" /> <span>Floor:</span> <span className="font-medium text-gray-900">{room.floor}</span></div>
+                  <div className="flex items-center gap-2 text-gray-600"><FaUsers className="text-gray-400" /> <span>Max Guests:</span> <span className="font-medium text-gray-900">{room.maxGuests}</span></div>
+                  <div className="flex items-center gap-2 text-gray-600"><FaRupeeSign className="text-gray-400" /> <span>Price/Night:</span> <span className="font-medium text-gray-900">₹{room.pricePerNight}</span></div>
                 </div>
               </div>
             </div>
 
             {/* Stay Dates Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-5 py-3">
-                <h2 className="text-white font-semibold flex items-center gap-2">
-                  <FaCalendarAlt /> Stay Dates
-                </h2>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                <FaCalendarAlt className="text-gray-500" /> Stay Dates
+              </h2>
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div className="flex-1 text-center p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500">Check-in</p>
+                  <p className="font-semibold text-gray-900">{formatDate(checkIn)}</p>
+                </div>
+                <div className="text-gray-400 text-xl">→</div>
+                <div className="flex-1 text-center p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500">Check-out</p>
+                  <p className="font-semibold text-gray-900">{formatDate(checkOut)}</p>
+                </div>
               </div>
-              <div className="p-5">
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                  <div className="text-center flex-1">
-                    <p className="text-xs text-gray-500">Check-in</p>
-                    <p className="font-semibold text-green-600">{formatDate(checkIn)}</p>
-                  </div>
-                  <div className="text-gray-400 text-xl">→</div>
-                  <div className="text-center flex-1">
-                    <p className="text-xs text-gray-500">Check-out</p>
-                    <p className="font-semibold text-red-600">{formatDate(checkOut)}</p>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t text-center">
-                  <p className="text-gray-600 flex items-center justify-center gap-2">
-                    <FaMoon className="text-amber-500" /> Total nights: <strong className="text-lg">{nights}</strong>
-                  </p>
-                </div>
+              <div className="mt-4 pt-3 border-t text-center">
+                <p className="text-gray-600 flex items-center justify-center gap-2">
+                  <FaMoon className="text-gray-400" /> Total nights: <strong className="text-lg">{nights}</strong>
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Right Column - Guest Form & Price */}
+          {/* RIGHT COLUMN – Guest Form & Price */}
           <div className="space-y-6">
             {/* Guest Details Form */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-5 py-3">
-                <h2 className="text-white font-semibold flex items-center gap-2">
-                  <FaUser /> Guest Details
-                </h2>
-              </div>
-              <div className="p-5">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="relative">
-                    <FaUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Full Name *"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                      required
-                    />
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                <FaUser className="text-gray-500" /> Guest Details
+              </h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="relative">
+                  <FaUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="text" placeholder="Full Name *" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 outline-none" required />
+                </div>
+                <div className="relative">
+                  <FaEnvelope className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="email" placeholder="Email *" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 outline-none" required />
+                </div>
+                <div className="relative">
+                  <FaPhoneAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type="tel" placeholder="Phone Number *" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 outline-none" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Number of Guests</label>
+                  <input type="number" min="1" max="10" value={formData.guests} onChange={(e) => setFormData({ ...formData, guests: parseInt(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 outline-none" />
+                  {formData.guests > (room.maxGuests || 2) && (
+                    <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">⚠️ Extra guests: ₹500 per person per night</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "cash", icon: <FaMoneyBillWave />, label: "Cash" },
+                      { value: "card", icon: <FaCreditCard />, label: "Card" },
+                      { value: "upi", icon: <FaMobileAlt />, label: "UPI" },
+                    ].map((method) => (
+                      <button
+                        key={method.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, paymentMethod: method.value })}
+                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
+                          formData.paymentMethod === method.value
+                            ? "border-gray-900 bg-gray-50 text-gray-900"
+                            : "border-gray-200 text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        {method.icon}
+                        <span className="text-xs">{method.label}</span>
+                      </button>
+                    ))}
                   </div>
-                  <div className="relative">
-                    <FaEnvelope className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="email"
-                      placeholder="Email *"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                      required
-                    />
-                  </div>
-                  <div className="relative">
-                    <FaPhoneAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="tel"
-                      placeholder="Phone Number *"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of Guests</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={formData.guests}
-                      onChange={(e) => setFormData({ ...formData, guests: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                    />
-                    {formData.guests > (room.maxGuests || 2) && (
-                      <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
-                        ⚠️ Extra guests: ₹500 per person per night
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { value: "cash", icon: <FaMoneyBillWave />, label: "Cash" },
-                        { value: "card", icon: <FaCreditCard />, label: "Card" },
-                        { value: "upi", icon: <FaMobileAlt />, label: "UPI" },
-                      ].map((method) => (
-                        <button
-                          key={method.value}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, paymentMethod: method.value })}
-                          className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
-                            formData.paymentMethod === method.value
-                              ? "border-amber-500 bg-amber-50 text-amber-700"
-                              : "border-gray-200 text-gray-500 hover:border-amber-300 hover:bg-gray-50"
-                          }`}
-                        >
-                          {method.icon}
-                          <span className="text-xs">{method.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </form>
-              </div>
+                </div>
+              </form>
             </div>
 
             {/* Price Breakdown Card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-5 py-3">
-                <h2 className="text-white font-semibold flex items-center gap-2">
-                  <FaRupeeSign /> Price Breakdown
-                </h2>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                <FaRupeeSign className="text-gray-500" /> Price Breakdown
+              </h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span>Room charges ({nights} nights × ₹{room.pricePerNight})</span><span className="font-medium">₹{roomCharge}</span></div>
+                {extraGuests > 0 && <div className="flex justify-between text-amber-600"><span>Extra guests ({extraGuests} × ₹500 × {nights} nights)</span><span>+ ₹{extraGuestCharge}</span></div>}
+                <div className="flex justify-between"><span>Service charge</span><span>₹200</span></div>
+                <div className="flex justify-between"><span>GST (18%)</span><span>₹{gstAmount}</span></div>
+                <div className="border-t pt-2 mt-2"><div className="flex justify-between font-bold text-lg"><span>Total Amount</span><span className="text-gray-900">₹{totalAmount}</span></div></div>
               </div>
-              <div className="p-5">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Room charges ({nights} nights × ₹{room.pricePerNight})</span>
-                    <span className="font-medium">₹{roomCharge}</span>
-                  </div>
-                  {extraGuests > 0 && (
-                    <div className="flex justify-between text-amber-600">
-                      <span>Extra guests ({extraGuests} × ₹500 × {nights} nights)</span>
-                      <span>+ ₹{extraGuestCharge}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Service charge</span>
-                    <span>₹200</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>GST (18%)</span>
-                    <span>₹{gstAmount}</span>
-                  </div>
-                  <div className="border-t pt-2 mt-2">
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Total Amount</span>
-                      <span className="text-amber-600">₹{totalAmount}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="w-full mt-5 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      Confirm Booking <FaArrowRight />
-                    </>
-                  )}
-                </button>
-                <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1">
-                  <FaCheckCircle className="text-green-500" /> Free cancellation up to 48 hours before check-in
-                </p>
-              </div>
+              <button onClick={handleSubmit} disabled={submitting} className="w-full mt-5 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {submitting ? "Processing..." : <>Confirm Booking <FaArrowRight /></>}
+              </button>
+              <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1"><FaCheckCircle className="text-green-500" /> Free cancellation up to 48 hours before check-in</p>
             </div>
           </div>
         </div>

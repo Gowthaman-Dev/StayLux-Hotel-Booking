@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/user/RoomDetails.jsx
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../../api/axios";
 import Spinner from "../../components/common/Spinner";
@@ -6,7 +7,12 @@ import { showError } from "../../utils/toast";
 import { useAuth } from "../../context/AuthContext";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { FaBed, FaUsers, FaLayerGroup, FaDoorOpen, FaWifi, FaCar, FaDumbbell, FaSwimmingPool, FaCoffee, FaTv, FaHotTub, FaSnowflake } from "react-icons/fa";
+import { 
+  FaBed, FaUsers, FaLayerGroup, FaDoorOpen, 
+  FaWifi, FaCar, FaDumbbell, FaSwimmingPool, FaCoffee, 
+  FaTv, FaHotTub, FaSnowflake, FaParking, FaConciergeBell,
+  FaUtensils, FaWind, FaRegClock, FaArrowLeft, FaChevronLeft, FaChevronRight
+} from "react-icons/fa";
 
 const RoomDetails = () => {
   const { id } = useParams();
@@ -19,6 +25,7 @@ const RoomDetails = () => {
   const [checkIn, setCheckIn] = useState(null);
   const [checkOut, setCheckOut] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const carouselInterval = useRef(null);
 
   useEffect(() => {
     const fetchRoom = async () => {
@@ -34,6 +41,37 @@ const RoomDetails = () => {
     };
     fetchRoom();
   }, [id]);
+
+  // Auto-slide carousel
+  const startAutoSlide = (imagesLength) => {
+    if (carouselInterval.current) clearInterval(carouselInterval.current);
+    if (imagesLength <= 1) return;
+    carouselInterval.current = setInterval(() => {
+      setSelectedImage(prev => (prev + 1) % imagesLength);
+    }, 4000);
+  };
+
+  useEffect(() => {
+    if (room && room.images && room.images.length > 1) {
+      startAutoSlide(room.images.length);
+    }
+    return () => {
+      if (carouselInterval.current) clearInterval(carouselInterval.current);
+    };
+  }, [room]);
+
+  const handlePrevImage = () => {
+    if (!room?.images?.length) return;
+    setSelectedImage(prev => (prev - 1 + room.images.length) % room.images.length);
+    // Restart auto-slide after manual interaction
+    startAutoSlide(room.images.length);
+  };
+
+  const handleNextImage = () => {
+    if (!room?.images?.length) return;
+    setSelectedImage(prev => (prev + 1) % room.images.length);
+    startAutoSlide(room.images.length);
+  };
 
   const calculateNights = () => {
     if (checkIn && checkOut) {
@@ -75,12 +113,12 @@ const RoomDetails = () => {
     });
   };
 
-  if (loading) return <Spinner fullScreen text="Loading..." />;
+  if (loading) return <Spinner fullScreen text="Loading room details..." />;
   if (!room) return <p className="p-6 text-center">Room not found</p>;
 
-  const imageBaseUrl = `${
-    import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000"
-  }/uploads/rooms/`;
+  const imageBaseUrl = import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+  const images = room.images || [];
+  const hasMultiple = images.length > 1;
 
   // Amenity icon mapping
   const amenityIcons = {
@@ -88,245 +126,187 @@ const RoomDetails = () => {
     ac: <FaSnowflake />,
     tv: <FaTv />,
     geyser: <FaHotTub />,
-    parking: <FaCar />,
-    breakfast: <FaCoffee />,
+    parking: <FaParking />,
+    breakfast: <FaUtensils />,
     pool: <FaSwimmingPool />,
     gym: <FaDumbbell />,
+    room_service: <FaConciergeBell />,
+    laundry: <FaWind />,
+    balcony: <FaDoorOpen />,
+    mini_bar: <FaCoffee />,
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Section with Gallery */}
-      <div className="relative bg-gray-900">
-        <div className="relative h-[60vh] md:h-[70vh] overflow-hidden">
-          <img
-            src={
-              room.images?.[selectedImage]
-                ? `${imageBaseUrl}${room.images[selectedImage]}`
-                : "https://via.placeholder.com/1200x800?text=No+Image"
-            }
-            alt={room.roomNumber}
-            className="w-full h-full object-cover object-center transition-transform duration-700"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
-        </div>
+    <div className="min-h-screen bg-gray-50 py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Back button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition"
+        >
+          <FaArrowLeft size={16} /> Back
+        </button>
 
-        {/* Thumbnail strip */}
-        {room.images?.length > 1 && (
-          <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
-            <div className="bg-black/50 backdrop-blur-md rounded-full px-3 py-2 flex gap-2 overflow-x-auto max-w-[90%]">
-              {room.images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedImage(i)}
-                  className={`transition-all duration-200 ${
-                    selectedImage === i
-                      ? "ring-2 ring-amber-500 scale-105"
-                      : "opacity-70 hover:opacity-100"
-                  }`}
-                >
-                  <img
-                    src={`${imageBaseUrl}${img}`}
-                    alt={`thumb-${i}`}
-                    className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-lg"
-                  />
-                </button>
-              ))}
+        {/* Main grid: Image gallery + Details & Booking */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* LEFT: Image Gallery */}
+          <div className="space-y-4">
+            <div className="relative group overflow-hidden rounded-2xl bg-gray-100 shadow-md">
+              <img
+                src={images.length > 0 ? `${imageBaseUrl}/uploads/rooms/${images[selectedImage]}` : "https://via.placeholder.com/800x500?text=No+Image"}
+                alt={`Room ${room.roomNumber}`}
+                className="w-full h-80 md:h-96 object-cover transition-transform duration-500 group-hover:scale-105"
+                onError={(e) => { e.target.src = "https://via.placeholder.com/800x500?text=No+Image"; }}
+              />
+              {hasMultiple && (
+                <>
+                  <button
+                    onClick={handlePrevImage}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Previous"
+                  >
+                    <FaChevronLeft size={18} />
+                  </button>
+                  <button
+                    onClick={handleNextImage}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Next"
+                  >
+                    <FaChevronRight size={18} />
+                  </button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-2 py-1 rounded-full">
+                    {selectedImage+1} / {images.length}
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Room title overlay */}
-        <div className="absolute bottom-8 left-6 md:left-12 text-white">
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                room.status === "available"
-                  ? "bg-green-500"
-                  : room.status === "occupied"
-                  ? "bg-red-500"
-                  : "bg-amber-500"
-              }`}
-            >
-              {room.status === "available" ? "Available" : room.status === "occupied" ? "Occupied" : "Reserved"}
-            </span>
-            <span className="text-xs bg-black/50 backdrop-blur px-3 py-1 rounded-full">
-              ⭐ {room.rating || 0} ({room.reviewCount || 0} reviews)
-            </span>
-          </div>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
-            Room {room.roomNumber}
-          </h1>
-          <p className="text-gray-200 text-lg mt-1 capitalize">{room.roomType}</p>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 relative z-10">
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column - Room Info (2/3 width) */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Key Features Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Key Features</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <FaBed className="text-amber-600 text-xl" />
-                  <div>
-                    <p className="text-xs text-gray-500">Bed Type</p>
-                    <p className="font-semibold capitalize">{room.bedType}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <FaUsers className="text-amber-600 text-xl" />
-                  <div>
-                    <p className="text-xs text-gray-500">Max Guests</p>
-                    <p className="font-semibold">{room.maxGuests}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <FaLayerGroup className="text-amber-600 text-xl" />
-                  <div>
-                    <p className="text-xs text-gray-500">Floor</p>
-                    <p className="font-semibold">{room.floor}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <FaDoorOpen className="text-amber-600 text-xl" />
-                  <div>
-                    <p className="text-xs text-gray-500">Room Number</p>
-                    <p className="font-semibold">{room.roomNumber}</p>
-                  </div>
-                </div>
+            {/* Thumbnails */}
+            {hasMultiple && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedImage(idx)}
+                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                      selectedImage === idx ? "border-gray-900" : "border-gray-200 hover:border-gray-400"
+                    }`}
+                  >
+                    <img
+                      src={`${imageBaseUrl}/uploads/rooms/${img}`}
+                      alt={`thumb-${idx}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.target.src = "https://via.placeholder.com/64?text=No+Img"; }}
+                    />
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
+
+          {/* RIGHT: Room Details + Booking Form */}
+          <div className="space-y-6">
+            {/* Title & Status */}
+            <div>
+              <div className="flex flex-wrap justify-between items-start gap-2">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Room {room.roomNumber}</h1>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  room.status === "available" ? "bg-green-100 text-green-700" : 
+                  room.status === "occupied" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"
+                }`}>
+                  {room.status === "available" ? "Available" : room.status === "occupied" ? "Occupied" : "Reserved"}
+                </span>
+              </div>
+              <p className="text-gray-500 text-sm capitalize mt-1">{room.roomType}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-amber-500">⭐</span>
+                <span className="text-gray-700">{room.rating || 0}</span>
+                <span className="text-gray-400 text-sm">({room.reviewCount || 0} reviews)</span>
+              </div>
+            </div>
+
+            {/* Key Features Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <FeatureCard icon={<FaBed />} label="Bed Type" value={room.bedType || "single"} />
+              <FeatureCard icon={<FaUsers />} label="Max Guests" value={room.maxGuests} />
+              <FeatureCard icon={<FaLayerGroup />} label="Floor" value={room.floor} />
+              <FeatureCard icon={<FaDoorOpen />} label="Room Number" value={room.roomNumber} />
             </div>
 
             {/* Description */}
             {room.description && (
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-3">Description</h2>
-                <p className="text-gray-600 leading-relaxed">{room.description}</p>
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">Description</h2>
+                <p className="text-gray-600 text-sm leading-relaxed">{room.description}</p>
               </div>
             )}
 
             {/* Amenities */}
-            {room.amenities?.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Amenities</h2>
-                <div className="flex flex-wrap gap-3">
-                  {room.amenities.map((a) => (
-                    <span
-                      key={a}
-                      className="flex items-center gap-2 bg-gray-100 text-gray-800 px-4 py-2 rounded-full text-sm capitalize"
-                    >
-                      {amenityIcons[a] || <span className="w-4" />}
-                      {a}
+            {room.amenities && room.amenities.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Amenities</h2>
+                <div className="flex flex-wrap gap-2">
+                  {room.amenities.map((amenity) => (
+                    <span key={amenity} className="flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-xs capitalize">
+                      {amenityIcons[amenity] || <FaWifi className="text-gray-500" />}
+                      {amenity.replace(/_/g, ' ')}
                     </span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Reviews Section */}
-            
-          </div>
-
-          {/* Right Column - Booking Card (1/3 width) */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24 bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-              <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-4">
-                <h2 className="text-xl font-bold text-white">Book This Room</h2>
-                <p className="text-gray-300 text-sm">
-                  ₹{room.pricePerNight} <span className="text-gray-400">/ night</span>
-                </p>
+            {/* Booking Card */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-24">
+              <div className="bg-gray-900 px-5 py-3">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-bold text-white">₹{room.pricePerNight}</span>
+                  <span className="text-gray-300 text-sm">/ night</span>
+                </div>
               </div>
-
-              {room.status === "available" ? (
-                <div className="p-6">
-                  {/* Date Pickers */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Check-in Date
-                      </label>
-                      <DatePicker
-                        selected={checkIn}
-                        onChange={(date) => {
-                          setCheckIn(date);
-                          if (checkOut && date >= checkOut) setCheckOut(null);
-                        }}
-                        minDate={new Date()}
-                        placeholderText="Select date"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                        dateFormat="dd/MM/yyyy"
-                      />
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Check-in Date</label>
+                  <DatePicker
+                    selected={checkIn}
+                    onChange={(date) => { setCheckIn(date); if (checkOut && date >= checkOut) setCheckOut(null); }}
+                    minDate={new Date()}
+                    placeholderText="Select date"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
+                    dateFormat="dd/MM/yyyy"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Check-out Date</label>
+                  <DatePicker
+                    selected={checkOut}
+                    onChange={(date) => setCheckOut(date)}
+                    minDate={checkIn || new Date()}
+                    placeholderText="Select date"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-gray-500 outline-none"
+                    dateFormat="dd/MM/yyyy"
+                  />
+                </div>
+                {checkIn && checkOut && (
+                  <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">{calculateNights()} night(s) × ₹{room.pricePerNight}</span>
+                      <span className="font-medium">₹{calculateTotalPrice()}</span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Check-out Date
-                      </label>
-                      <DatePicker
-                        selected={checkOut}
-                        onChange={(date) => setCheckOut(date)}
-                        minDate={checkIn || new Date()}
-                        placeholderText="Select date"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                        dateFormat="dd/MM/yyyy"
-                      />
+                    <div className="border-t pt-1 flex justify-between font-semibold">
+                      <span>Total</span>
+                      <span className="text-gray-900">₹{calculateTotalPrice()}</span>
                     </div>
                   </div>
-
-                  {/* Price Preview */}
-                  {checkIn && checkOut && (
-                    <div className="mt-5 p-4 bg-gray-50 rounded-xl">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">
-                          {calculateNights()} night(s) × ₹{room.pricePerNight}
-                        </span>
-                        <span className="font-medium">₹{calculateTotalPrice()}</span>
-                      </div>
-                      <div className="border-t border-gray-200 mt-2 pt-2 flex justify-between font-bold">
-                        <span>Total</span>
-                        <span className="text-amber-600">₹{calculateTotalPrice()}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleBookNow}
-                    disabled={bookingLoading}
-                    className="w-full mt-5 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {bookingLoading ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Processing...
-                      </>
-                    ) : (
-                      "Book Now →"
-                    )}
-                  </button>
-
-                  <p className="text-xs text-gray-500 text-center mt-3">
-                    Free cancellation up to 48 hours before check-in
-                  </p>
-                </div>
-              ) : (
-                <div className="p-6 text-center">
-                  <div className="text-red-500 text-5xl mb-3">🔒</div>
-                  <p className="text-red-600 font-semibold">Room not available</p>
-                  <p className="text-gray-500 text-sm mt-1">Please check other rooms</p>
-                  <button
-                    onClick={() => navigate("/rooms")}
-                    className="mt-4 text-amber-600 hover:text-amber-700 font-medium"
-                  >
-                    Browse other rooms →
-                  </button>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={handleBookNow}
+                  disabled={bookingLoading}
+                  className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {bookingLoading ? "Processing..." : "Book Now →"}
+                </button>
+                <p className="text-xs text-gray-500 text-center">Free cancellation up to 48 hours before check-in</p>
+              </div>
             </div>
           </div>
         </div>
@@ -334,5 +314,14 @@ const RoomDetails = () => {
     </div>
   );
 };
+
+// Helper component for feature cards
+const FeatureCard = ({ icon, label, value }) => (
+  <div className="bg-white rounded-xl border border-gray-200 p-3 text-center hover:shadow-md transition">
+    <div className="text-gray-600 text-xl mb-1">{icon}</div>
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-sm font-semibold text-gray-800 capitalize">{value}</p>
+  </div>
+);
 
 export default RoomDetails;
