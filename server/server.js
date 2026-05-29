@@ -22,35 +22,61 @@ import paymentRoutes from "./routes/payment.js";
 import logger from "./middlewares/logger.js";
 import errorHandler from "./middlewares/errorHandler.js";
 
-// Get __dirname equivalent in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 dotenv.config();
 connectdb();
 
 const app = express();
 
-// ✅ Core Middlewares
+// __dirname fix (ESM)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// =======================
+// JSON Middleware
+// =======================
 app.use(express.json());
 
-// ✅ CORS – allow your Vercel frontend (read from environment)
-//    On Render, set FRONTEND_URL = https://stay-lux-hotel-booking-nine.vercel.app
-//    For testing only, you can replace with `origin: true` (allows any origin)
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
-  credentials: true,
-}));
+// =======================
+// CORS CONFIG (FIXED)
+// =======================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://stay-lux-hotel-booking-nine.vercel.app",
+];
 
-// ✅ Logger
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // allow mobile apps / postman
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("Blocked by CORS:", origin);
+        callback(null, false);
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  })
+);
+
+// =======================
+// Logger
+// =======================
 app.use(logger);
 
-// ✅ Test Route
+// =======================
+// Test Route
+// =======================
 app.get("/", (req, res) => {
   res.send("API Running 🚀");
 });
 
-// ✅ API Routes
+// =======================
+// API Routes
+// =======================
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoutes);
@@ -62,10 +88,14 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/settings", settingRoutes);
 app.use("/api/payments", paymentRoutes);
 
-// ✅ Static files (images) – serve uploads folder
+// =======================
+// Static Files
+// =======================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ❌ 404 Handler (must be after all routes)
+// =======================
+// 404 Handler
+// =======================
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -73,11 +103,16 @@ app.use((req, res) => {
   });
 });
 
-// ❌ Global Error Handler (always last)
+// =======================
+// Error Handler
+// =======================
 app.use(errorHandler);
 
-// ✅ Server Start
+// =======================
+// Server Start
+// =======================
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
